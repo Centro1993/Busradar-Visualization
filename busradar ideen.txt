@@ -1,0 +1,10 @@
+-heatmap mit geschwindigkeiten, an von google maps exportierter kml der busroute orientiert
+	unterscheiden nach:
+	-linie
+	-fahrtrichtung (zielShort)
+	-wochentag
+	-uhrzeit (stündlich)
+
+-pünklichkeitswerte (woher kommen die fahrpläne?)
+
+-durchschnittliche busposition um uhrzeit (werktag/ wochenende)
