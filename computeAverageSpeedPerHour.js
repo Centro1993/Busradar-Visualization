@@ -24,23 +24,33 @@ fs.readdir('./routes/cropped/', (err, files) => {
     files.forEach(file => {
         console.log(file);
         routes[file] = {
+            //longitude and latidute from route files
             lat: [],
-            lon: []
+            lon: [],
+            //all speeds in total and the number of ticks which we use to compute that speed go here (will be deleted later on)
+            allSpeedsAdded: [],
+            speedTickNumber: [],
+            //placeholder for average speed result ( will be computed at the end),
+            averageSpeed: []
         };
         fs.readFile('./routes/cropped/' + file, 'utf-8', (err, data) => {
             data.toString().split('\n').forEach(function(line) {
-                //save longitude and latitude
-                line = line.split(',');
-                routes[file].lon.push(line[0]);
-                routes[file].lat.push(line[1]);
+                //check if line is filled
+                if (typeof line !== "undefined" && line !== null && line !== "") {
+                    //save longitude and latitude
+                    line = line.split(',');
+                    routes[file].lon.push(line[0]);
+                    routes[file].lat.push(line[1]);
+                    //init all other values
+                    routes[file].allSpeedsAdded.push(0);
+                    routes[file].speedTickNumber.push(0);
+                    routes[file].averageSpeed.push(0);
+                }
             });
 
             //get ticks for specific line from db
             MongoClient.connect(dbUrl, function(err, db) {
                 assert.equal(null, err);
-
-                //save the last tick
-                let lastTick = "";
 
                 db.collection("line-" + file).find({
                     $and: [{
@@ -54,19 +64,26 @@ fs.readdir('./routes/cropped/', (err, files) => {
                             }
                         }
                     ]
-                }, function(err, res) {
+                }).toArray((err, res) => {
+                    //save the last tick
+                    let lastTick = [];
+
                     //iterate all ticks selected
                     res.forEach((tick) => {
-                        //check if last tick is set
-                        if (lastTick !== "") {
+                        //save current vehicle to differentiate between ticks of different vehicles
+                        let vehicle = tick.vehicleId;
+
+                        //check if last tick is set and some time has passed
+                        if (typeof lastTick[vehicle] !== "undefined" && tick.LastModified - lastTick[vehicle].LastModified > 0) {
+
                             //compute median coordinate, time and speed
-                            let averageLat = (tick.lat + lastTick.lat) / 2;
-                            let averageLon = (tick.lon + lastTick.lon) / 2;
-                            let distance = geodist(tick, lastTick, {
+                            let averageLat = (tick.lat + lastTick[vehicle].lat) / 2;
+                            let averageLon = (tick.lon + lastTick[vehicle].lon) / 2;
+                            let distance = geodist(tick, lastTick[vehicle], {
                                 exact: true,
                                 unit: 'meters'
                             });
-                            let time = tick.LastModified - lastTick.LastModified;
+                            let time = tick.LastModified - lastTick[vehicle].LastModified;
                             let speed = distance / time * 3.6;
 
                             let averageTick = {
@@ -77,7 +94,7 @@ fs.readdir('./routes/cropped/', (err, files) => {
                                 speed: speed
                             };
 
-                            console.dir(averageTick);
+                            //console.dir(averageTick);
 
                             let closestRoutePoint = {
                                 index: 0,
@@ -96,13 +113,12 @@ fs.readdir('./routes/cropped/', (err, files) => {
                                         lat: lat,
                                         lon: lon
                                     }, {
-                                      lat: averageTick.lat,
-                                      lon: averageTick. lon
+                                        lat: averageTick.lat,
+                                        lon: averageTick.lon
                                     }, {
                                         exact: true,
                                         unit: "meters"
                                     });
-                                    console.log(distanceToCurrentRoutePoint);
 
                                     //check if distance to current route route pint is shorter than the one we saved
                                     if (distanceToCurrentRoutePoint < closestRoutePoint.distance) {
@@ -113,18 +129,45 @@ fs.readdir('./routes/cropped/', (err, files) => {
                                         };
                                     }
                                 }
-
                             });
-                            console.log(closestRoutePoint);
-                            process.exit();
+
+                            //now that we know the route point closest to the average tick, add average speed to the route point
+                            routes[file].speedTickNumber[parseInt(closestRoutePoint.index)]++;
+                            routes[file].allSpeedsAdded[parseInt(closestRoutePoint.index)] += averageTick.speed;
                         }
 
-                        //save current tick
-                        lastTick = tick;
+                        //save current tick to compute the median with the next tick
+                        lastTick[vehicle] = tick;
 
                     }, function(err) {
                         console.log(err);
                         db.close();
+                    });
+
+                    //all ticks averaged and sorted to their closest route points
+                    //now, compute the average speed of each route point
+                    routes[file].averageSpeed.forEach((ele, ind, arr) => {
+                        //when no data is given for a route point, interpolate by getting data from the nearest neighbours
+                        if(routes[file].speedTickNumber[ind] === 0) {
+                          routes[file].allSpeedsAdded[ind] = routes[file].allSpeedsAdded[ind-1] + routes[file].allSpeedsAdded[ind+1];
+                          routes[file].speedTickNumber[ind] = routes[file].speedTickNumber[ind-1] + routes[file].speedTickNumber[ind+1];
+                        }
+
+                        //compute average speed
+                        arr[ind] = routes[file].allSpeedsAdded[ind] / routes[file].speedTickNumber[ind];
+                    });
+
+                    //delete helper arrays from routes array for this file
+                    delete routes[file].allSpeedsAdded;
+                    delete routes[file].speedTickNumber;
+
+                    //we are done here, save the route points and their speeds as json to a file
+                    fs.writeFile("./routesWithAverageSpeed/" + file + ".json", JSON.stringify(routes[file]), function(err) {
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        console.log("Average Speeds for Line " + file + " have been saved!");
                     });
                 });
             });
