@@ -6,5 +6,10 @@
 	-uhrzeit (stündlich)
 
 -pünklichkeitswerte (woher kommen die fahrpläne?)
+	-statt fahrpläne mittelwerte von position/ uhrzeit
 
 -durchschnittliche busposition um uhrzeit (werktag/ wochenende)
+
+-quality of service
+	-unterschiede zwischen linien und vehikeln
+	-pünktlichkeit
