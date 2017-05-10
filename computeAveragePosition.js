@@ -54,7 +54,7 @@ fs.readdir('./routes/cropped/', (err, files) => {
 				return startTime + interval < Date.now() / 1000;
 			}, (callback) => {
 				computeAveragePositionInIntervalPerLine(startTime, file, routes[file], (positions) => {
-					console.log(positions);
+					//console.log(positions);
 
 					//sort result by startTime
 					let date = new Date(startTime * 1000);
@@ -65,12 +65,18 @@ fs.readdir('./routes/cropped/', (err, files) => {
 					//increment startTime
 					startTime += interval;
 
+					let bulkInsert = [];
+
 					//add date to positions
 					positions.forEach((ele, ind, arr) => {
 						ele.date = date;
 						ele.day = day;
 						ele.hour = hour;
 						ele.minute = minute;
+
+						let insert = {insertOne : {document: ele}};
+
+						bulkInsert.push(insert);
 					});
 
 					if (typeof positions[0] !== 'undefined') {
@@ -78,14 +84,16 @@ fs.readdir('./routes/cropped/', (err, files) => {
 						MongoClient.connect(intermediateDbUrl, function(err, db) {
 							assert.equal(null, err);
 
-							db.collection('line-' + file).bulkWrite(positions, (err, res) => {
+							db.collection('line-' + file).bulkWrite(bulkInsert, (err, res) => {
 								db.close();
+
+								//console.log('Average Positions for Line ' + file + ', day ' + day + ', hour ' + hour + ', minute ' + minute + ' have been processed!');
+								callback(null, null);
 							});
 						});
+					} else {
+						callback(null, null);
 					}
-
-					console.log('Average Positions for Line ' + file + ', day ' + day + ', hour ' + hour + ', minute ' + minute + ' have been processed!');
-					callback(null, null);
 				});
 
 			}, (err, res) => {

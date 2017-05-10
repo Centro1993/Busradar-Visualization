@@ -70,7 +70,7 @@ fs.readdir('./routes/cropped/', (err, files) => {
 			computedRoute.speedTickNumber = [];
 
 			chron.whilst(() => {
-				return endTime < 1491979144 + 20 * 3600;
+				return endTime < Date.now() / 1000;//1491979144 + 3600 * 20;
 			}, (callback) => {
 
 				computeAverageRouteSpeedInHourPerLine(startTime, endTime, file, routes[file], (allSpeedsAdded, speedTickNumber) => {
@@ -85,10 +85,14 @@ fs.readdir('./routes/cropped/', (err, files) => {
 					endTime += 3600;
 
 					//add speeds and ticknumber to sorted array
-					computedRoute.lat.forEach((ele, ind, arr) => {
-						computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind] = allSpeedsAdded[ind];
-						computedRouteTotalAverage['day-' + day]['hour-' + hour].speedTickNumber[ind] = speedTickNumber[ind];
+					routes[file].lat.forEach((ele, ind, arr) => {
+						computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind] += allSpeedsAdded[ind];
+						computedRouteTotalAverage['day-' + day]['hour-' + hour].speedTickNumber[ind] += speedTickNumber[ind];
+
+						//console.log(allSpeedsAdded);
+						//console.log(computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind]);
 					});
+					//process.exit();
 
 					console.log('Average Speeds for Line ' + file + ', day ' + day + ', hour ' + hour + ' have been processed!');
 					callback(null, null);
@@ -96,20 +100,29 @@ fs.readdir('./routes/cropped/', (err, files) => {
 
 			}, (err, res) => {
 
+				fs.writeFile('./routesWithAverageSpeed/' + file + '-debug.json', JSON.stringify(computedRouteTotalAverage), function(err) {
+					if (err) {
+						return console.log(err);
+					}
+					console.log('Route ' + file + 'has been saved!');
+				});
+
 				//compute average values for each day, hour and route tick
 				for (let dayInd = 0; dayInd < 7; dayInd++) {
 					for (let hourInd = 0; hourInd < 24; hourInd++) {
 						let hasValuesFlag = false;
+
 						computedRoute.lat.forEach((ele, ind) => {
 
 							//check if values are set
 							let newAverageSpeed = computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].allSpeedsAdded[ind] / computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].speedTickNumber[ind];
 
-							console.log(newAverageSpeed);
+							//console.log(newAverageSpeed);
 							if (!isNaN(newAverageSpeed)) {
-								console.log(newAverageSpeed);
+								//console.log(newAverageSpeed);
 								hasValuesFlag = true;
-								computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].averageSpeed[ind] = newAverageSpeed;
+								computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd][ind] = newAverageSpeed;
+
 							}
 						});
 
@@ -121,11 +134,13 @@ fs.readdir('./routes/cropped/', (err, files) => {
 						if (!hasValuesFlag) {
 							console.log('delete averagespeed');
 							delete computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].averageSpeed;
+						} else {
+							console.log('Average Speeds for Line ' + file + ', day ' + dayInd + ', hour ' + hourInd + ' have been saved!');
 						}
 					}
 				}
 
-				//console.log(computedRouteTotalAverage);
+				console.dir(computedRouteTotalAverage);
 				//console.log(JSON.stringify(computedRouteTotalAverage));
 
 				//we are done here, save the route points and their speeds as json to a line
