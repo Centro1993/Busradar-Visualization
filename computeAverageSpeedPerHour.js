@@ -48,20 +48,20 @@ fs.readdir('./routes/cropped/', (err, files) => {
 				lon: routes[file].lon
 			};
 
-			let computedRouteTotalAverage = {};
+			let computedRouteTotalAverage = [];
 
 			//fill temporary arrays with enough zeroes
 			for (let iDay = 0; iDay < 7; iDay++) {
-				computedRouteTotalAverage['day-' + iDay] = {};
+				computedRouteTotalAverage[iDay] = [];
 				for (let iHour = 0; iHour < 24; iHour++) {
-					computedRouteTotalAverage['day-' + iDay]['hour-' + iHour] = {};
-					computedRouteTotalAverage['day-' + iDay]['hour-' + iHour].speedTickNumber = [];
-					computedRouteTotalAverage['day-' + iDay]['hour-' + iHour].allSpeedsAdded = [];
-					computedRouteTotalAverage['day-' + iDay]['hour-' + iHour].averageSpeed = [];
+					computedRouteTotalAverage[iDay][iHour] = {};
+					computedRouteTotalAverage[iDay][iHour].speedTickNumber = [];
+					computedRouteTotalAverage[iDay][iHour].allSpeedsAdded = [];
+					computedRouteTotalAverage[iDay][iHour].averageSpeed = [];
 
 					routes[file].lat.forEach((ele, ind, arr) => {
-						computedRouteTotalAverage['day-' + iDay]['hour-' + iHour].speedTickNumber.push(0);
-						computedRouteTotalAverage['day-' + iDay]['hour-' + iHour].allSpeedsAdded.push(0);
+						computedRouteTotalAverage[iDay][iHour].speedTickNumber.push(0);
+						computedRouteTotalAverage[iDay][iHour].allSpeedsAdded.push(0);
 					});
 				}
 			}
@@ -86,8 +86,8 @@ fs.readdir('./routes/cropped/', (err, files) => {
 
 					//add speeds and ticknumber to sorted array
 					routes[file].lat.forEach((ele, ind, arr) => {
-						computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind] += allSpeedsAdded[ind];
-						computedRouteTotalAverage['day-' + day]['hour-' + hour].speedTickNumber[ind] += speedTickNumber[ind];
+						computedRouteTotalAverage[day][hour].allSpeedsAdded[ind] += allSpeedsAdded[ind];
+						computedRouteTotalAverage[day][hour].speedTickNumber[ind] += speedTickNumber[ind];
 
 						//console.log(allSpeedsAdded);
 						//console.log(computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind]);
@@ -115,25 +115,25 @@ fs.readdir('./routes/cropped/', (err, files) => {
 						computedRoute.lat.forEach((ele, ind) => {
 
 							//check if values are set
-							let newAverageSpeed = computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].allSpeedsAdded[ind] / computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].speedTickNumber[ind];
+							let newAverageSpeed = computedRouteTotalAverage[dayInd][hourInd].allSpeedsAdded[ind] / computedRouteTotalAverage[dayInd][hourInd].speedTickNumber[ind];
 
 							//console.log(newAverageSpeed);
 							if (!isNaN(newAverageSpeed)) {
 								//console.log(newAverageSpeed);
 								hasValuesFlag = true;
-								computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd][ind] = newAverageSpeed;
+								computedRouteTotalAverage[dayInd][hourInd].averageSpeed[ind] = newAverageSpeed;
 
 							}
 						});
 
 						//delete computiation data arrays
-						delete computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].speedTickNumber;
-						delete computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].allSpeedsAdded;
+						delete computedRouteTotalAverage[dayInd][hourInd].speedTickNumber;
+						delete computedRouteTotalAverage[dayInd][hourInd].allSpeedsAdded;
 
 						//delete averagespeedArray if it has no values
 						if (!hasValuesFlag) {
 							console.log('delete averagespeed');
-							delete computedRouteTotalAverage['day-' + dayInd]['hour-' + hourInd].averageSpeed;
+							delete computedRouteTotalAverage[dayInd][hourInd].averageSpeed;
 						} else {
 							console.log('Average Speeds for Line ' + file + ', day ' + dayInd + ', hour ' + hourInd + ' have been saved!');
 						}
