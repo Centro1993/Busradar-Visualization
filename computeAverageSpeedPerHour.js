@@ -1,4 +1,4 @@
-//TODO sort by arrival
+//TODO multithreaden
 
 const fs = require('fs'),
 	//readline = require('readline'),
@@ -50,19 +50,11 @@ fs.readdir('./routes/cropped/', (err, files) => {
 
 			let computedRouteTotalAverage = [];
 
-			//fill temporary arrays with enough zeroes
+			//instantiate temporary arrays
 			for (let iDay = 0; iDay < 7; iDay++) {
 				computedRouteTotalAverage[iDay] = [];
 				for (let iHour = 0; iHour < 24; iHour++) {
 					computedRouteTotalAverage[iDay][iHour] = {};
-					computedRouteTotalAverage[iDay][iHour].speedTickNumber = [];
-					computedRouteTotalAverage[iDay][iHour].allSpeedsAdded = [];
-					computedRouteTotalAverage[iDay][iHour].averageSpeed = [];
-
-					routes[file].lat.forEach((ele, ind, arr) => {
-						computedRouteTotalAverage[iDay][iHour].speedTickNumber.push(0);
-						computedRouteTotalAverage[iDay][iHour].allSpeedsAdded.push(0);
-					});
 				}
 			}
 
@@ -70,10 +62,12 @@ fs.readdir('./routes/cropped/', (err, files) => {
 			computedRoute.speedTickNumber = [];
 
 			chron.whilst(() => {
-				return endTime < Date.now() / 1000;//1491979144 + 3600 * 20;
+				return endTime < Date.now() / 1000; //1491979144 + 3600 * 20;//
 			}, (callback) => {
 
 				computeAverageRouteSpeedInHourPerLine(startTime, endTime, file, routes[file], (allSpeedsAdded, speedTickNumber) => {
+
+					let directions = Object.keys(allSpeedsAdded);
 
 					//sort result by startTime
 					let date = new Date(startTime * 1000);
@@ -84,21 +78,34 @@ fs.readdir('./routes/cropped/', (err, files) => {
 					startTime += 3600;
 					endTime += 3600;
 
-					//add speeds and ticknumber to sorted array
-					routes[file].lat.forEach((ele, ind, arr) => {
-						computedRouteTotalAverage[day][hour].allSpeedsAdded[ind] += allSpeedsAdded[ind];
-						computedRouteTotalAverage[day][hour].speedTickNumber[ind] += speedTickNumber[ind];
+					//add speeds and ticknumber to sorted array for each direction
+					directions.forEach((direction) => {
+						routes[file].lat.forEach((ele, ind, arr) => {
+							//instantiate arrays and fill with zeroes if neccesary
+							if (!(computedRouteTotalAverage[day][hour][direction] instanceof Object)) {
+								computedRouteTotalAverage[day][hour][direction] = {};
+								computedRouteTotalAverage[day][hour][direction].speedTickNumber = [];
+								computedRouteTotalAverage[day][hour][direction].allSpeedsAdded = [];
+								computedRouteTotalAverage[day][hour][direction].averageSpeed = [];
 
-						//console.log(allSpeedsAdded);
-						//console.log(computedRouteTotalAverage['day-' + day]['hour-' + hour].allSpeedsAdded[ind]);
+								routes[file].lat.forEach((ele, ind, arr) => {
+									computedRouteTotalAverage[day][hour][direction].speedTickNumber.push(0);
+									computedRouteTotalAverage[day][hour][direction].allSpeedsAdded.push(0);
+								});
+							}
+
+							computedRouteTotalAverage[day][hour][direction].allSpeedsAdded[ind] += allSpeedsAdded[direction][ind];
+							computedRouteTotalAverage[day][hour][direction].speedTickNumber[ind] += speedTickNumber[direction][ind];
+						});
 					});
-					//process.exit();
 
 					console.log('Average Speeds for Line ' + file + ', day ' + day + ', hour ' + hour + ' have been processed!');
 					callback(null, null);
 				});
 
 			}, (err, res) => {
+
+				console.dir(computedRouteTotalAverage);
 
 				fs.writeFile('./routesWithAverageSpeed/' + file + '-debug.json', JSON.stringify(computedRouteTotalAverage), function(err) {
 					if (err) {
@@ -110,33 +117,37 @@ fs.readdir('./routes/cropped/', (err, files) => {
 				//compute average values for each day, hour and route tick
 				for (let dayInd = 0; dayInd < 7; dayInd++) {
 					for (let hourInd = 0; hourInd < 24; hourInd++) {
-						let hasValuesFlag = false;
+						let directions = Object.keys(computedRouteTotalAverage[dayInd][hourInd]);
 
-						computedRoute.lat.forEach((ele, ind) => {
+						directions.forEach((direction) => {
+							let hasValuesFlag = false;
 
-							//check if values are set
-							let newAverageSpeed = computedRouteTotalAverage[dayInd][hourInd].allSpeedsAdded[ind] / computedRouteTotalAverage[dayInd][hourInd].speedTickNumber[ind];
+							computedRoute.lat.forEach((ele, ind) => {
 
-							//console.log(newAverageSpeed);
-							if (!isNaN(newAverageSpeed)) {
+								//check if values are set
+								let newAverageSpeed = computedRouteTotalAverage[dayInd][hourInd][direction].allSpeedsAdded[ind] / computedRouteTotalAverage[dayInd][hourInd][direction].speedTickNumber[ind];
+
 								//console.log(newAverageSpeed);
-								hasValuesFlag = true;
-								computedRouteTotalAverage[dayInd][hourInd].averageSpeed[ind] = newAverageSpeed;
+								if (!isNaN(newAverageSpeed)) {
+									//console.log(newAverageSpeed);
+									hasValuesFlag = true;
+									computedRouteTotalAverage[dayInd][hourInd][direction].averageSpeed[ind] = newAverageSpeed;
 
+								}
+							});
+
+							//delete computiation data arrays
+							delete computedRouteTotalAverage[dayInd][hourInd][direction].speedTickNumber;
+							delete computedRouteTotalAverage[dayInd][hourInd][direction].allSpeedsAdded;
+
+							//delete averagespeedArray if it has no values
+							if (!hasValuesFlag) {
+								console.log('delete averagespeed');
+								delete computedRouteTotalAverage[dayInd][hourInd][direction].averageSpeed;
+							} else {
+								console.log('Average Speeds for Line ' + file + ', day ' + dayInd + ', hour ' + hourInd + ', Direction: '+direction+', have been saved!');
 							}
 						});
-
-						//delete computiation data arrays
-						delete computedRouteTotalAverage[dayInd][hourInd].speedTickNumber;
-						delete computedRouteTotalAverage[dayInd][hourInd].allSpeedsAdded;
-
-						//delete averagespeedArray if it has no values
-						if (!hasValuesFlag) {
-							console.log('delete averagespeed');
-							delete computedRouteTotalAverage[dayInd][hourInd].averageSpeed;
-						} else {
-							console.log('Average Speeds for Line ' + file + ', day ' + dayInd + ', hour ' + hourInd + ' have been saved!');
-						}
 					}
 				}
 
@@ -173,121 +184,147 @@ function computeAverageRouteSpeedInHourPerLine(start, end, line, route, callback
 				}
 			}
 			]
-		}).toArray((err, res) => {
-
-			let speedTickNumber = [];
-			let allSpeedsAdded = [];
-			let averageSpeed = [];
-
-			//fill helper arrays with as many values as their are route markers
-			route.lat.forEach(() => {
-				speedTickNumber.push(0);
-				allSpeedsAdded.push(0);
-				averageSpeed.push(0);
-				[];
-			});
+		}).sort({
+			'timestamp': 1
+		}).toArray((err, resUnsorted) => {
 
 			//break if no result
-			if (typeof res === 'undefined') {
+			if (typeof resUnsorted === 'undefined') {
 				return;
 			}
 
-			//save the last tick
-			let lastTick = [];
+			let resSortedByDestination = {};
+			let speedTickNumber = {};
+			let allSpeedsAdded = {};
 
-			//iterate all ticks selected
-			res.forEach((tick) => {
-				//save current vehicle to differentiate between ticks of different vehicles
-				let vehicle = tick.vehicleId;
-
-				//check if last tick is set and some time has passed
-				if (typeof lastTick[vehicle] !== 'undefined' && tick.LastModified - lastTick[vehicle].LastModified > 0) {
-
-					//compute median coordinate, time and speed
-					let averageLat = (tick.lat + lastTick[vehicle].lat) / 2;
-					let averageLon = (tick.lon + lastTick[vehicle].lon) / 2;
-					let distance = geodist(tick, lastTick[vehicle], {
-						exact: true,
-						unit: 'meters'
+			//sort results by directions
+			resUnsorted.forEach((tick) => {
+				if (!(resSortedByDestination[tick.ZielShort] instanceof Array)) {
+					resSortedByDestination[tick.ZielShort] = [];
+					allSpeedsAdded[tick.ZielShort] = [];
+					speedTickNumber[tick.ZielShort] = [];
+					//fill helper arrays with zeroes
+					route.lat.forEach(() => {
+						allSpeedsAdded[tick.ZielShort].push(0);
+						speedTickNumber[tick.ZielShort].push(0);
 					});
-					let time = tick.LastModified - lastTick[vehicle].LastModified;
-					let speed = distance / time * 3.6;
+				}
+				resSortedByDestination[tick.ZielShort].push(tick);
+			});
 
-					let averageTick = {
-						lat: averageLat,
-						lon: averageLon,
-						distance: distance,
-						time: time,
-						speed: speed
-					};
+			for (let destination in resSortedByDestination) {
 
-					//console.dir(averageTick);
+				//let averageSpeed = [];
 
-					let closestRoutePoint = {
-						index: 0,
-						distance: Number.MAX_SAFE_INTEGER
-					};
+				//fill helper arrays with as many values as their are route markers
+				/*
+				route.lat.forEach(() => {
+					//averageSpeed.push(0);
+				});
+				*/
 
-					//iterate route to find nearest point
-					route.lat.forEach((lat, ind) => {
+				//save the last tick
+				let lastTick = [];
 
-						//get lon matching to lat
-						let lon = route.lon[ind];
-						//sanity check
-						if (typeof lat !== 'undefined' && typeof lon !== 'undefined') {
+				//iterate all ticks selected
+				resSortedByDestination[destination].forEach((tick) => {
+					//save current vehicle to differentiate between ticks of different vehicles
+					let vehicle = tick.vehicleId;
 
-							let distanceToCurrentRoutePoint = geodist({
-								lat: lat,
-								lon: lon
-							}, {
-								lat: averageTick.lat,
-								lon: averageTick.lon
-							}, {
-								exact: true,
-								unit: 'meters'
-							});
+					//check if last tick is set and some time has passed
+					if (typeof lastTick[vehicle] !== 'undefined' && tick.LastModified - lastTick[vehicle].LastModified > 0) {
 
-							//check if distance to current route route pint is shorter than the one we saved
-							if (distanceToCurrentRoutePoint < closestRoutePoint.distance) {
-								//save current distance and route point index
-								closestRoutePoint = {
-									index: ind,
-									distance: distanceToCurrentRoutePoint
-								};
+						//compute median coordinate, time and speed
+						let averageLat = (tick.lat + lastTick[vehicle].lat) / 2;
+						let averageLon = (tick.lon + lastTick[vehicle].lon) / 2;
+						let distance = geodist(tick, lastTick[vehicle], {
+							exact: true,
+							unit: 'meters'
+						});
+						let time = tick.LastModified - lastTick[vehicle].LastModified;
+						let speed = distance / time * 3.6;
+
+						let averageTick = {
+							lat: averageLat,
+							lon: averageLon,
+							distance: distance,
+							time: time,
+							speed: speed
+						};
+
+						//console.dir(averageTick);
+
+						let closestRoutePoint = {
+							index: 0,
+							distance: Number.MAX_SAFE_INTEGER
+						};
+
+						//iterate route to find nearest point
+						route.lat.forEach((lat, ind) => {
+
+							//get lon matching to lat
+							let lon = route.lon[ind];
+							//sanity check
+							if (typeof lat !== 'undefined' && typeof lon !== 'undefined') {
+
+								let distanceToCurrentRoutePoint = geodist({
+									lat: lat,
+									lon: lon
+								}, {
+									lat: averageTick.lat,
+									lon: averageTick.lon
+								}, {
+									exact: true,
+									unit: 'meters'
+								});
+
+								//check if distance to current route route pint is shorter than the one we saved
+								if (distanceToCurrentRoutePoint < closestRoutePoint.distance) {
+									//save current distance and route point index
+									closestRoutePoint = {
+										index: ind,
+										distance: distanceToCurrentRoutePoint
+									};
+								}
 							}
+						});
+
+						//sanity check
+						if (typeof speedTickNumber[tick.ZielShort][parseInt(closestRoutePoint.index)] !== 'undefined') {
+							//now that we know the route point closest to the average tick, add average speed to the route point
+							speedTickNumber[tick.ZielShort][parseInt(closestRoutePoint.index)]++;
+							allSpeedsAdded[tick.ZielShort][parseInt(closestRoutePoint.index)] += averageTick.speed;
 						}
-					});
-					//sanity check
-					if (typeof speedTickNumber[parseInt(closestRoutePoint.index)] !== 'undefined') {
-						//now that we know the route point closest to the average tick, add average speed to the route point
-						speedTickNumber[parseInt(closestRoutePoint.index)]++;
-						allSpeedsAdded[parseInt(closestRoutePoint.index)] += averageTick.speed;
 					}
-				}
 
-				//save current tick to compute the median with the next tick
-				lastTick[vehicle] = tick;
+					//save current tick to compute the median with the next tick
+					lastTick[vehicle] = tick;
 
-			}, function(err) {
-				console.log(err);
-				db.close();
-			});
+				}, function(err) {
+					console.log(err);
+					db.close();
+				});
 
-			//all ticks averaged and sorted to their closest route points
-			//now, compute the average speed of each route point
-			averageSpeed.forEach((ele, ind, arr) => {
-				//when no data is given for a route point, interpolate by getting data from the nearest neighbours
-				if (speedTickNumber[ind] === 0) {
-					allSpeedsAdded[ind] = allSpeedsAdded[ind - 1] + allSpeedsAdded[ind + 1];
-					speedTickNumber[ind] = speedTickNumber[ind - 1] + speedTickNumber[ind + 1];
-				}
+				/*
 
-				//compute average speed
-				arr[ind] = allSpeedsAdded[ind] / speedTickNumber[ind];
-			});
+				//all ticks averaged and sorted to their closest route points
+				//now, compute the average speed of each route point
+				averageSpeed.forEach((ele, ind, arr) => {
+					//when no data is given for a route point, interpolate by getting data from the nearest neighbours
+					if (speedTickNumber[ind] === 0) {
+						allSpeedsAdded[ind] = allSpeedsAdded[ind - 1] + allSpeedsAdded[ind + 1];
+						speedTickNumber[ind] = speedTickNumber[ind - 1] + speedTickNumber[ind + 1];
+					}
 
-			//save avereage speeds to local instance of route
-			route.averageSpeed = averageSpeed;
+					//compute average speed
+					arr[ind] = allSpeedsAdded[ind] / speedTickNumber[ind];
+				});
+
+				//save avereage speeds to local instance of route
+				route.averageSpeed = averageSpeed;
+
+				*/
+			}
 
 			callback(allSpeedsAdded, speedTickNumber);
 		});
