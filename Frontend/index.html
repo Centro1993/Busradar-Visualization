@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+	<title>Busradar-Mining</title>
+	<meta charset="utf-8">
+
+	<link rel="stylesheet" href="public/leaflet/leaflet.css" />
+	<script src="public/leaflet/leaflet.js"></script>
+	<script src="public/heatmap.min.js"></script>
+	<script src="public/leaflet-heatmap.js"></script>
+	<script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
+</head>
+
+<body>
+
+	<div id="map-canvas" style="height: 640px;"></div>
+
+	<script>
+		//RGB TO HEX (https://stackoverflow.com/questions/5623838/rgb-to-hex-and-hex-to-rgb#5624139)
+		function componentToHex(c) {
+			var hex = c.toString(16);
+			return hex.length == 1 ? "0" + hex : hex;
+		}
+
+		function rgbToHex(r, g, b) {
+			return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+		}
+		///
+
+		let lines = [11, 4];
+		let currentLine = null;
+
+		let routes = [];
+
+		let destinations = [];
+
+		lines.forEach((line) => {
+			destinations[line] = [];
+		});
+
+		//declare function
+		var changeMapSettings;
+
+		//heatmap values for positions for each minute of the week
+		let positionValues = [];
+
+		//heatmap values for averageSpeed for each hour of the week
+		let speedValues = [];
+
+		let heatmapValues = {
+			max: 2,
+			data: []
+		};
+
+		//create user input for line
+		var s = $('<select id="line" onchange="changeMapSettings()"/>');
+
+		lines.forEach((line, lineInd) => {
+			$('<option />', {
+				value: line,
+				text: "Linie " + line
+			}).appendTo(s);
+		});
+
+		s.appendTo('body');
+
+		//create user input for destination
+		var des = $('<select id="destination" onchange="changeMapSettings()"/>');
+
+		des.appendTo('body');
+
+		//load all routes and route data
+		lines.forEach((ele) => {
+
+			routes[ele] = {
+				//longitude and latidute from route files
+				lat: [],
+				lon: []
+			};
+
+			$(function() {
+
+
+				positionValues[ele] = [];
+
+				$.get('public/routes/' + ele, function(data) {
+
+					data.toString().split('\n').forEach(function(row) {
+						//check if line is filled
+						if (typeof row !== 'undefined' && row !== null && row !== '') {
+							//save longitude and latitude
+							row = row.split(',');
+							routes[ele].lat.push(row[0]);
+							routes[ele].lon.push(row[1]);
+						}
+					});
+
+					//load average positions for route
+					$.getJSON('public/averagePositionOverWeek/' + ele + '.json', function(data) {
+						//fill position arrays with enough zeroes
+						for (let iDay = 0; iDay < 7; iDay++) {
+							positionValues[ele][iDay] = [];
+							for (let iHour = 0; iHour < 24; iHour++) {
+								positionValues[ele][iDay][iHour] = [];
+								for (let iMinute = 0; iMinute < 60; iMinute++) {
+									positionValues[ele][iDay][iHour][iMinute] = {};
+									for (let iDirection = 0; iDirection < 2; iDirection++) {
+										positionValues[ele][iDay][iHour][iMinute][iDirection] = [];
+									}
+								}
+							}
+						}
+
+						//flag for setting route destinations
+						let destinationsFound = false;
+
+						//iterate all position data and create heatmap values from it
+						data.route.forEach((day, dayInd, dayArr) => {
+							data.route[dayInd].forEach((hour, hourInd, hourArr) => {
+								data.route[dayInd][hourInd].forEach((minute, minuteInd, minuteArr) => {
+									if (data.route[dayInd][hourInd][minuteInd] != null) {
+
+										Object.keys(data.route[dayInd][hourInd][minuteInd]).forEach((direction, directionInd, directionArr) => {
+											data.route[dayInd][hourInd][minuteInd][direction].forEach((position, positionInd, positionArr) => {
+												//create empty route array filled with zeroes for direction
+												if (!(positionValues[ele][dayInd][hourInd][minuteInd][direction] instanceof Array)) {
+													positionValues[ele][dayInd][hourInd][minuteInd][direction] = [];
+													for (let iPosition = 0; iPosition < routes[ele].lat.length; iPosition++) {
+														positionValues[ele][dayInd][hourInd][minuteInd][direction].push(0);
+													}
+												}
+												positionValues[ele][dayInd][hourInd][minuteInd][direction][position]++;
+											});
+										});
+
+										//add destinations if not found before
+										if (!destinationsFound) {
+											if (Object.keys(data.route[dayInd][hourInd][minuteInd]).length == 2) {
+												Object.keys(data.route[dayInd][hourInd][minuteInd]).forEach((dirName) => {
+													destinations[parseInt(ele)].push(dirName);
+												});
+												destinationsFound = true;
+											}
+										}
+									}
+								});
+							});
+						});
+
+						$.getJSON('public/routesWithAverageSpeed/' + ele + '.json', function(data) {
+
+							//fill position arrays with enough zeroes
+							speedValues[ele] = [];
+							for (let iDay = 0; iDay < 7; iDay++) {
+								speedValues[ele][iDay] = [];
+								for (let iHour = 0; iHour < 24; iHour++) {
+									speedValues[ele][iDay][iHour] = {};
+								}
+							}
+
+							data.forEach((day, dayInd) => {
+								data[dayInd].forEach((hour, hourInd) => {
+
+									if (typeof data[dayInd][hourInd] !== "undefined") {
+										Object.keys(data[dayInd][hourInd]).forEach((direction, directionInd) => {
+											data[dayInd][hourInd][direction].averageSpeed.forEach((position, positionInd) => {
+												//create empty array if it dows not exist
+												if (!(speedValues[ele][dayInd][hourInd][direction] instanceof Array)) {
+													speedValues[ele][dayInd][hourInd][direction] = [];
+												}
+
+												speedValues[ele][dayInd][hourInd][direction][positionInd] = position;
+											});
+										});
+									}
+								});
+							});
+						});
+
+						changeMapSettings();
+
+					}).error(function() {
+						console.log('error');
+					});
+
+				}).error(function() {
+					console.log('error');
+				});
+			});
+		});
+
+		//user input function
+		//delete last heatmmap data layer and create new one from position array at selected time/ line
+		changeMapSettings = function() {
+			//get user input
+			let type = document.getElementById('maptype').value;
+			let line = document.getElementById('line').value;
+			let day = document.getElementById('day').value;
+			let hour = document.getElementById('hour').value;
+			let minute = document.getElementById('minute').value;
+
+			//check if line has been changed
+			if (line != currentLine || typeof document.getElementById('destination').value == null) {
+				//change direction dropdown
+				$('#destination')
+					.find('option')
+					.remove()
+					.end()
+
+				destinations[line].forEach((direction) => {
+					$('<option />', {
+						value: direction,
+						text: direction
+					}).appendTo(document.getElementById('destination'));
+				});
+
+				currentLine = line;
+			}
+			let direction = document.getElementById('destination').value;
+
+			//generate position values heatmap
+			if (type == "position") {
+				map.removeLayer(speedLayer);
+				map.addLayer(positionLayer);
+
+				heatmapValues.data = [];
+
+				//check if there is data for the selected minute
+				if (typeof positionValues[line][day][hour][minute][direction] === "undefined")
+					return;
+
+				positionValues[line][day][hour][minute][direction].forEach((position, positionInd) => {
+					if (position != 0) {
+						let newValue = {
+							lat: routes[line].lon[positionInd],
+							lng: routes[line].lat[positionInd],
+							count: position
+						}
+						heatmapValues.data.push(newValue);
+					}
+				});
+
+				positionLayer.setData(heatmapValues);
+			}
+			//generate speed values heatmap
+			else if (type == "speed") {
+				map.removeLayer(positionLayer);
+				map.addLayer(speedLayer);
+
+				//remove all polylines of future iterations
+				speedLayer.eachLayer((layer) => {
+					map.removeLayer(layer);
+				});
+
+				//check if there is data for the selected minute
+				if (typeof speedValues[line][day][hour][direction] === "undefined")
+					return;
+
+				//get all speed values for selected minute and compute new layer
+				let lastValue = [];
+				speedValues[line][day][hour][direction].forEach((speed, speedInd) => {
+					//check if speed is valid
+					if (speed != 0 && speed != null) {
+						//draw new line if two values are given, else set first line value
+						if (typeof lastValue[0] !== "undefined") {
+							let newLine = [lastValue, [routes[line].lon[speedInd], routes[line].lat[speedInd]]];
+							let color = Math.min(parseInt(speed * 4), 255);
+							let polyline = L.polyline(newLine, speedLineOptions(color)).on("mouseover", (e) => {
+									var popup = $("<div></div>", {
+										id: "popup-" + speedInd,
+										css: {
+											position: "absolute",
+											top: e.originalEvent.pageY + 20 + "px",
+											left: e.originalEvent.pageX + 20 + "px",
+											zIndex: 1002,
+											backgroundColor: "white",
+											padding: "8px",
+											border: "1px solid #ccc"
+										}
+									});
+									// Insert a headline into that popup
+									var hed = $("<div></div>", {
+										text: "Speed: " + parseInt(speed) + " km/h",
+										css: {
+											fontSize: "16px",
+											marginBottom: "3px"
+										}
+									}).appendTo(popup);
+									// Add the popup to the map
+									popup.appendTo("#map-canvas");
+								})
+								// Create a mouseout event that undoes the mouseover changes
+								.on("mouseout", function(e) {
+									// And then destroying the popup
+									$("#popup-" + speedInd).remove();
+								}).addTo(speedLayer);
+						}
+						//save last line point
+						lastValue = [routes[line].lon[speedInd], routes[line].lat[speedInd]];
+					}
+				});
+			}
+		}
+
+		var baseLayer = L.tileLayer(
+			'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				attribution: '...',
+				maxZoom: 13
+			}
+		);
+
+		var positionCfg = {
+			// radius should be small ONLY if scaleRadius is true (or small radius is intended)
+			// if scaleRadius is false it will be the constant radius used in pixels
+			"radius": 20,
+			"maxOpacity": 1,
+			// scales the radius based on map zoom
+			"scaleRadius": false,
+			// if set to false the heatmap uses the global maximum for colorization
+			// if activated: uses the data maximum within the current map boundaries
+			//   (there will always be a red spot with useLocalExtremas true)
+			"useLocalExtrema": true,
+			// which field name in your data represents the latitude - default "lat"
+			latField: 'lat',
+			// which field name in your data represents the longitude - default "lng"
+			lngField: 'lng',
+			// which field name in your data represents the data value - default "value"
+			valueField: 'count'
+		};
+
+
+		var positionLayer = new HeatmapOverlay(positionCfg);
+
+		var speedLineOptions = function(color) {
+			return {
+				color: rgbToHex(color, color, 0),
+				weight: 10,
+				stroke: true,
+				noclip: true,
+			};
+		};
+
+		var speedLayer = L.layerGroup();
+
+		var map = new L.Map('map-canvas', {
+			center: new L.LatLng(9.47608, 54.8138),
+			zoom: 0,
+			layers: [baseLayer, positionLayer, speedLayer],
+		});
+
+		map.setView([54.8138, 9.47608], 13);
+	</script>
+	<select id="maptype" onchange="changeMapSettings()"><option value="position">Position</option><option value="speed">Speed</option></select>
+	<br> Tag: <input id="day" type="range" min="0" max="6" oninput="changeMapSettings()" />
+	<br> Stunde: <input id="hour" type="range" min="0" max="23" oninput="changeMapSettings()" />
+	<br> Minute: <input id="minute" type="range" min="0" max="59" oninput="changeMapSettings()" />
+
+</body>
+
+</html>
