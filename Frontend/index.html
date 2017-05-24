@@ -371,6 +371,7 @@
 				map.removeLayer(positionLayer);
 				map.removeLayer(speedHeatLayer);
 				map.removeLayer(speedLayer);
+				map.removeLayer(speedDeltaLayer);
 				map.addLayer(speedDeltaLayer);
 
 				if (typeof speedDeltaValues[line][day][hour][direction] === "undefined")
