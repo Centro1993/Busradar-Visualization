@@ -374,6 +374,11 @@
 				map.removeLayer(speedDeltaLayer);
 				map.addLayer(speedDeltaLayer);
 
+				//remove all polylines of future iterations
+				speedDeltaLayer.eachLayer((layer) => {
+					map.removeLayer(layer);
+				});
+
 				if (typeof speedDeltaValues[line][day][hour][direction] === "undefined")
 					return;
 
