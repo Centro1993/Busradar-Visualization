@@ -407,7 +407,7 @@
 									});
 									// Insert a headline into that popup
 									var hed = $("<div></div>", {
-										text: "Accelleration: " + speedDelta + " km/h",
+										text: "Accelleration: " + Math.floor(speedDelta) + " km/h",
 										css: {
 											fontSize: "16px",
 											marginBottom: "3px"
@@ -500,11 +500,13 @@
 			} else {
 				color = rgbToHex(0, 0, parseInt(Math.min(Math.abs(speedDelta * 6), 255)));
 			}
+			let opacity =  Math.min(1, Math.abs(speedDelta/100)*3);
+			console.log(opacity)
 			return {
 				color: color,
 				weight: 6,
 				stroke: true,
-				opacity: 0.8,
+				opacity: opacity,
 				noclip: false,
 			};
 		};
