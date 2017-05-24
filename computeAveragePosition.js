@@ -97,6 +97,7 @@ fs.readdir('./routes/cropped/', (err, files) => {
 				});
 
 			}, (err, res) => {
+				console.log('Averrage Position for line '+file+' done');
 				/*
 								console.log('Computing average positions...');
 

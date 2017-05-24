@@ -1,9 +1,5 @@
 //this script computes the average position of a bus line at a given time interval
 
-//TODO sort result by vehicle
-//TODO sort results by arrival location
-
-
 const fs = require('fs'),
 	MongoClient = require('mongodb').MongoClient,
 	assert = require('assert');

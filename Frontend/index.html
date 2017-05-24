@@ -48,12 +48,15 @@
 		//heatmap values for averageSpeed for each hour of the week
 		let speedValues = [];
 
-		let heatmapValues = {
+		//heatmap values for deltaSpeed for each hour of the week
+		let speedDeltaValues = [];
+
+		let heatmapPositionValues = {
 			max: 2,
 			data: []
 		};
 
-		let mapSpeedValues = {
+		let heatmapSpeedValues = {
 			max: 150,
 			data: []
 		}
@@ -153,6 +156,7 @@
 							});
 						});
 
+						//prepare average speed values
 						$.getJSON('public/routesWithAverageSpeed/' + ele + '.json', function(data) {
 
 							//fill position arrays with enough zeroes
@@ -176,6 +180,36 @@
 												}
 
 												speedValues[ele][dayInd][hourInd][direction][positionInd] = position;
+											});
+										});
+									}
+								});
+							});
+						});
+
+						$.getJSON('public/averageSpeedDeltas/' + ele + '.json', function(data) {
+
+							//fill position arrays with enough zeroes
+							speedDeltaValues[ele] = [];
+							for (let iDay = 0; iDay < 7; iDay++) {
+								speedDeltaValues[ele][iDay] = [];
+								for (let iHour = 0; iHour < 24; iHour++) {
+									speedDeltaValues[ele][iDay][iHour] = {};
+								}
+							}
+
+							data.forEach((day, dayInd) => {
+								data[dayInd].forEach((hour, hourInd) => {
+
+									if (typeof data[dayInd][hourInd] !== "undefined") {
+										Object.keys(data[dayInd][hourInd]).forEach((direction, directionInd) => {
+											data[dayInd][hourInd][direction].forEach((position, positionInd) => {
+												//create empty array if it dows not exist
+												if (!(speedDeltaValues[ele][dayInd][hourInd][direction] instanceof Array)) {
+													speedDeltaValues[ele][dayInd][hourInd][direction] = [];
+												}
+
+												speedDeltaValues[ele][dayInd][hourInd][direction][positionInd] = position;
 											});
 										});
 									}
@@ -228,9 +262,10 @@
 			if (type == "position") {
 				map.removeLayer(speedLayer);
 				map.removeLayer(speedHeatLayer);
+				map.removeLayer(speedDeltaLayer);
 				map.addLayer(positionLayer);
 
-				heatmapValues.data = [];
+				heatmapPositionValues.data = [];
 
 				//check if there is data for the selected minute
 				if (typeof positionValues[line][day][hour][minute][direction] === "undefined")
@@ -243,15 +278,17 @@
 							lng: routes[line].lat[positionInd],
 							count: position
 						}
-						heatmapValues.data.push(newValue);
+						heatmapPositionValues.data.push(newValue);
 					}
 				});
 
-				positionLayer.setData(heatmapValues);
+				positionLayer.setData(heatmapPositionValues);
 			}
 			//generate speed values heatmap
 			else if (type == "speed") {
 				map.removeLayer(positionLayer);
+				map.removeLayer(speedHeatLayer);
+				map.removeLayer(speedDeltaLayer);
 				map.addLayer(speedHeatLayer);
 				map.addLayer(speedLayer);
 
@@ -262,7 +299,8 @@
 
 
 				//remove heatmap data
-				mapSpeedValues.data = [];
+				heatmapSpeedValues.data = [];
+				speedHeatLayer.setData(heatmapSpeedValues);
 
 				//check if there is data for the selected minute
 				if (typeof speedValues[line][day][hour][direction] === "undefined")
@@ -276,11 +314,11 @@
 							lng: routes[line].lat[speedInd],
 							count: speed
 						}
-						mapSpeedValues.data.push(newValue);
+						heatmapSpeedValues.data.push(newValue);
 					}
 				});
 
-				speedHeatLayer.setData(mapSpeedValues);
+				speedHeatLayer.setData(heatmapSpeedValues);
 
 
 				////POPUP POLYLINE
@@ -325,6 +363,61 @@
 						}
 						//save last line point
 						lastValue = [routes[line].lon[speedInd], routes[line].lat[speedInd]];
+					}
+				});
+			}
+			//generate speed delta heatmap
+			else if (type == "speedDelta") {
+				map.removeLayer(positionLayer);
+				map.removeLayer(speedHeatLayer);
+				map.removeLayer(speedLayer);
+				map.addLayer(speedDeltaLayer);
+
+				if (typeof speedDeltaValues[line][day][hour][direction] === "undefined")
+					return;
+
+				//get all speedDelta values for selected minute and compute new layer
+				let lastValue = [];
+
+				speedDeltaValues[line][day][hour][direction].forEach((speedDelta, speedDeltaInd) => {
+					//check if speed is valid
+					if (speedDelta != null) {
+						//draw new line if two values are given, else set first line value
+						if (typeof lastValue[0] !== "undefined") {
+							let newLine = [lastValue, [routes[line].lon[speedDeltaInd], routes[line].lat[speedDeltaInd]]];
+
+							let polyline = L.polyline(newLine, speedDeltaLineOptions(speedDelta)).on("mouseover", (e) => {
+									var popup = $("<div></div>", {
+										id: "popup-" + speedDeltaInd,
+										css: {
+											position: "absolute",
+											top: e.originalEvent.pageY + 20 + "px",
+											left: e.originalEvent.pageX + 20 + "px",
+											zIndex: 1002,
+											backgroundColor: "white",
+											padding: "8px",
+											border: "1px solid #ccc"
+										}
+									});
+									// Insert a headline into that popup
+									var hed = $("<div></div>", {
+										text: "Accelleration: " + speedDelta + " km/h",
+										css: {
+											fontSize: "16px",
+											marginBottom: "3px"
+										}
+									}).appendTo(popup);
+									// Add the popup to the map
+									popup.appendTo("#map-canvas");
+								})
+								// Create a mouseout event that undoes the mouseover changes
+								.on("mouseout", function(e) {
+									// And then destroying the popup
+									$("#popup-" + speedDeltaInd).remove();
+								}).addTo(speedDeltaLayer);
+						}
+						//save last line point
+						lastValue = [routes[line].lon[speedDeltaInd], routes[line].lat[speedDeltaInd]];
 					}
 				});
 			}
@@ -381,7 +474,6 @@
 			}
 		};
 
-
 		var speedHeatLayer = new HeatmapOverlay(speedCfg);
 		var positionLayer = new HeatmapOverlay(positionCfg);
 
@@ -395,17 +487,35 @@
 			};
 		};
 
+		var speedDeltaLineOptions = function(speedDelta) {
+			let color;
+			if (speedDelta >= 0) {
+				color = rgbToHex(parseInt(Math.min(speedDelta * 6, 255)), 0, 0);
+			} else {
+				color = rgbToHex(0, 0, parseInt(Math.min(Math.abs(speedDelta * 6), 255)));
+			}
+			return {
+				color: color,
+				weight: 6,
+				stroke: true,
+				opacity: 0.8,
+				noclip: false,
+			};
+		};
+
+		var speedDeltaLayer = L.layerGroup();
 		var speedLayer = L.layerGroup();
 
 		var map = new L.Map('map-canvas', {
-			center: new L.LatLng(9.47608, 54.8138),
-			zoom: 0,
-			layers: [baseLayer, positionLayer, speedLayer, speedHeatLayer],
+			center: new L.LatLng(54.8138, 9.47608),
+			layers: [baseLayer, positionLayer, speedLayer, speedHeatLayer, speedDeltaLayer],
+			zoom: 13,
+			minZoom: 13
 		});
 
 		map.setView([54.8138, 9.47608], 13);
 	</script>
-	<select id="maptype" onchange="changeMapSettings()"><option value="position">Position</option><option value="speed">Speed</option></select>
+	<select id="maptype" onchange="changeMapSettings()"><option value="position">Position</option><option value="speed">Speed</option><option value="speedDelta">Accelleration</option></select>
 	<br> Tag: <input id="day" type="range" min="0" max="6" oninput="changeMapSettings()" />
 	<br> Stunde: <input id="hour" type="range" min="0" max="23" oninput="changeMapSettings()" />
 	<br> Minute: <input id="minute" type="range" min="0" max="59" oninput="changeMapSettings()" />
