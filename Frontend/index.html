@@ -121,9 +121,6 @@
 							}
 						}
 
-						//flag for setting route destinations
-						let destinationsFound = false;
-
 						//iterate all position data and create heatmap values from it
 						data.route.forEach((day, dayInd, dayArr) => {
 							data.route[dayInd].forEach((hour, hourInd, hourArr) => {
@@ -144,14 +141,12 @@
 										});
 
 										//add destinations if not found before
-										if (!destinationsFound) {
-											if (Object.keys(data.route[dayInd][hourInd][minuteInd]).length == 2) {
-												Object.keys(data.route[dayInd][hourInd][minuteInd]).forEach((dirName) => {
-													destinations[parseInt(ele)].push(dirName);
-												});
-												destinationsFound = true;
+										Object.keys(data.route[dayInd][hourInd][minuteInd]).forEach((dirName) => {
+
+											if (destinations[parseInt(ele)].indexOf(dirName) == -1) {
+												destinations[parseInt(ele)].push(dirName);
 											}
-										}
+										});
 									}
 								});
 							});
@@ -241,9 +236,9 @@
 			let minute = document.getElementById('minute').value;
 
 			//set info labels
-			$('.dayInfo').text(parseInt(day)+1);
-			$('.hourInfo').text(parseInt(hour)+1);
-			$('.minuteInfo').text(parseInt(minute)+1);
+			$('.dayInfo').text(parseInt(day) + 1);
+			$('.hourInfo').text(parseInt(hour) + 1);
+			$('.minuteInfo').text(parseInt(minute) + 1);
 
 			//check if line has been changed
 			if (line != currentLine || typeof document.getElementById('destination').value == null) {
@@ -473,7 +468,7 @@
 			//   (there will always be a red spot with useLocalExtremas true)
 			"useLocalExtrema": false,
 
-			"gradient" : {
+			"gradient": {
 				"0": "black",
 				"1": "white"
 			},
@@ -536,9 +531,12 @@
 	</script>
 	<div class="controls">
 		<select id="maptype" onchange="changeMapSettings()"><option value="position">Position</option><option value="speed">Speed</option><option value="speedDelta">Accelleration</option></select>
-		<p class="infoName">Tag: </p><input id="day" class="input" type="range" min="0" max="6" oninput="changeMapSettings()" /><p class="dayInfo info"></p>
-		<p class="infoName"> Stunde: </p><input id="hour" class="input" type="range" min="0" max="23" oninput="changeMapSettings()" /><p class="hourInfo info"></p>
-		<p class="infoName"> Minute: </p><input id="minute" class="input" type="range" min="0" max="59" oninput="changeMapSettings()" /><p class="minuteInfo info"></p>
+		<p class="infoName">Tag: </p><input id="day" class="input" type="range" min="0" max="6" oninput="changeMapSettings()" />
+		<p class="dayInfo info"></p>
+		<p class="infoName"> Stunde: </p><input id="hour" class="input" type="range" min="0" max="23" oninput="changeMapSettings()" />
+		<p class="hourInfo info"></p>
+		<p class="infoName"> Minute: </p><input id="minute" class="input" type="range" min="0" max="59" oninput="changeMapSettings()" />
+		<p class="minuteInfo info"></p>
 	</div>
 </body>
 
