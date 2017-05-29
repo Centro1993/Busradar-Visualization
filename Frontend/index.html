@@ -459,14 +459,15 @@
 		var positionCfg = {
 			// radius should be small ONLY if scaleRadius is true (or small radius is intended)
 			// if scaleRadius is false it will be the constant radius used in pixels
-			"radius": 20,
+			"radius": 12,
 			"maxOpacity": 1,
+			'minOpacity': 0.6,
 			// scales the radius based on map zoom
 			"scaleRadius": false,
 			// if set to false the heatmap uses the global maximum for colorization
 			// if activated: uses the data maximum within the current map boundaries
 			//   (there will always be a red spot with useLocalExtremas true)
-			"useLocalExtrema": true,
+			"useLocalExtrema": false,
 			// which field name in your data represents the latitude - default "lat"
 			latField: 'lat',
 			// which field name in your data represents the longitude - default "lng"
@@ -541,13 +542,13 @@
 		var speedLayer = L.layerGroup();
 
 		var map = new L.Map('map-canvas', {
-			center: new L.LatLng(54.8138, 9.47608),
+			center: new L.LatLng(54.7877397,9.4283955),
 			layers: [baseLayer, positionLayer, speedLayer, speedHeatLayer, speedDeltaLayer],
 			zoom: 13,
 			minZoom: 13
 		});
 
-		map.setView([54.8138, 9.47608], 13);
+		map.setView([54.7877397,9.4283955], 13);
 
 		//disable dragging on controls
 		let controls = document.getElementsByClassName('controls')[0];
